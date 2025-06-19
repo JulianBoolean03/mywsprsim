@@ -1,0 +1,8 @@
+*.wav
+*.bits
+*.sync
+*.out
+*.data
+*.o
+full_*.wav
+short_silence.wav
