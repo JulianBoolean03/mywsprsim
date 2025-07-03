@@ -20,14 +20,13 @@
 #include <cstdint>
 #include <cstring>
 #include "src/JTEncode.h"
- 
 
-// Audio parameters
-constexpr int    SAMPLE_RATE   = 48000;
-constexpr double SYMBOL_RATE   = 162.0 / 110.612;   // ≈1.464817 symbols/sec
-constexpr double BIT_PERIOD    = 1.0 / SYMBOL_RATE;
-constexpr double FREQ0         = 1400.0;            // “0” tone (Hz)
-constexpr double FREQ1         = 1440.0;            // “1” tone (Hz)
+// Audio parameters (matching wsprsimwav.c)
+const int    SAMPLE_RATE   = 48000;             // 48kHz sampling rate
+const int    SYMBOL_LENGTH = 32768;             // samples per symbol
+const double CENTER_FREQ   = 1500.0;           // center frequency (Hz)
+const double FREQ_SPACING  = 48000.0 / 32768;  // = 1.46484375 Hz spacing
+const int    DELAY_SAMPLES = 48000;             // 1 second delay
 
 // Write 16-bit PCM WAV (mono)
 void write_wav(const char *fn, const std::vector<int16_t>& samples) {
@@ -84,42 +83,31 @@ int main(int argc, char** argv) {
                     normal_syms);
 
 
-    // 1) Encode normal
-   // if(wspr_encode(call, grid, dbm, normal_syms) != 0) {
-     //   std::fprintf(stderr,"wspr_encode() failed\n");
-       // return 3;
-    //}
-
     // 2) Dump normal bits + wav
     write_bits("wspr_normal.bits", normal_syms);
     std::puts("→ wspr_normal.bits");
-    // build wav samples
+    // build wav samples (matching wsprsimwav.c algorithm)
     {
-        size_t samplesPerBit = size_t(std::round(BIT_PERIOD * SAMPLE_RATE));
-        std::vector<int16_t> audio;
-        audio.reserve(samplesPerBit * WSPR_SYMBOL_COUNT);
+        size_t total_samples = DELAY_SAMPLES + (SYMBOL_LENGTH * WSPR_SYMBOL_COUNT);
+        std::vector<int16_t> audio(total_samples, 0);
+        double phase = 0.0;
+        
         for(int i=0; i<WSPR_SYMBOL_COUNT; ++i) {
-            double freq = normal_syms[i] ? FREQ1 : FREQ0;
-            for(size_t n=0; n<samplesPerBit; ++n) {
-                double t = double(n + i*samplesPerBit) / SAMPLE_RATE;
-                double s = std::sin(2*M_PI*freq*t);
-                audio.push_back(int16_t(s * 32767));
+            // Frequency calculation matching reference: center + (symbol - 1.5) * spacing
+            double freq = CENTER_FREQ + ((double)normal_syms[i] - 1.5) * FREQ_SPACING;
+            double dphi = 2.0 * M_PI * freq / SAMPLE_RATE;
+            
+            for(int j=0; j<SYMBOL_LENGTH; ++j) {
+                int sample_idx = DELAY_SAMPLES + (SYMBOL_LENGTH * i) + j;
+                double s = std::sin(phase);
+                audio[sample_idx] = int16_t(s * 32767);
+                phase += dphi;
             }
         }
         write_wav("wspr_normal.wav", audio);
         std::puts("→ wspr_normal.wav");
     }
 
-   
-        // 3) Build altered by inverting only the 11-symbol sync vector
-    //    leave the remainder of the message symbols untouched
-    //for(int i=0; i<11; ++i) {
-       // alt_syms[i] = uint8_t(3 - normal_syms[i]);
-    //}
-    // copy the rest of the payload unchanged
-    //for(int i=11; i<WSPR_SYMBOL_COUNT; ++i) {
-      //  alt_syms[i] = normal_syms[i];
-    //}
     const uint8_t sync_vector[WSPR_SYMBOL_COUNT] = {
     1, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 1, 1, 0, 0, 0, 1, 0, 0,
     1, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0,
@@ -143,15 +131,20 @@ int main(int argc, char** argv) {
     write_bits("wspr_altered.bits", alt_syms);
     std::puts("→ wspr_altered.bits");
     {
-        size_t samplesPerBit = size_t(std::round(BIT_PERIOD * SAMPLE_RATE));
-        std::vector<int16_t> audio;
-        audio.reserve(samplesPerBit * WSPR_SYMBOL_COUNT);
+        size_t total_samples = DELAY_SAMPLES + (SYMBOL_LENGTH * WSPR_SYMBOL_COUNT);
+        std::vector<int16_t> audio(total_samples, 0);
+        double phase = 0.0;
+        
         for(int i=0; i<WSPR_SYMBOL_COUNT; ++i) {
-            double freq = alt_syms[i] ? FREQ1 : FREQ0;
-            for(size_t n=0; n<samplesPerBit; ++n) {
-                double t = double(n + i*samplesPerBit) / SAMPLE_RATE;
-                double s = std::sin(2*M_PI*freq*t);
-                audio.push_back(int16_t(s * 32767));
+            // Frequency calculation matching reference: center + (symbol - 1.5) * spacing
+            double freq = CENTER_FREQ + ((double)alt_syms[i] - 1.5) * FREQ_SPACING;
+            double dphi = 2.0 * M_PI * freq / SAMPLE_RATE;
+            
+            for(int j=0; j<SYMBOL_LENGTH; ++j) {
+                int sample_idx = DELAY_SAMPLES + (SYMBOL_LENGTH * i) + j;
+                double s = std::sin(phase);
+                audio[sample_idx] = int16_t(s * 32767);
+                phase += dphi;
             }
         }
         write_wav("wspr_altered.wav", audio);
