@@ -21,5 +21,3 @@ for offset in $(seq -2 0.1 4.0); do
 done
 
 echo "done"
-
-
