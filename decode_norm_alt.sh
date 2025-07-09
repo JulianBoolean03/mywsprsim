@@ -1,23 +1,15 @@
 #!/bin/bash
 
-echo "Trying offsets from -2.0s to 4.0s in 0.1s steps..."
+echo "Testing altered sync vector with normal decoder using RF file..."
 
-for offset in $(seq -2 0.1 4.0); do
-  echo "--- Trying offset: ${offset}s ---"
-  length=$(echo "110.592 - $offset" | bc -l)
-  sox wspr_altered.wav temp.wav trim "$offset" "$length" 2>/dev/null
+# Decode RF file directly (no offset processing needed)
+result=$(./wspr-cui/wsprd/wsprd -d -f 1.5 wspr_altered.rf | grep -v "<DecodeFinished>")
 
-  # capture wsprd’s output (minus the <DecodeFinished> line)
- # result=$(./wsprd -d -f 1400 temp.wav | grep -v "<DecodeFinished>")
-  result=$(./wspr-cui/wsprd/wsprd -d -f 1400 temp.wav | grep -v "<DecodeFinished>")
-
-  if [[ -n "$result" ]]; then
-    echo "Error!! Decoded altered wav with normal wsprd ${offset}:"
-    echo "$result"
-    break
-  else
-    echo "Altered could not be decoded at this offset"
-  fi
-done
+if [[ -n "$result" ]]; then
+  echo "[ERROR] Decoded altered RF with normal wsprd:"
+  echo "$result"
+else
+  echo "[OK] Correct: Altered sync vector could not be decoded with normal decoder"
+fi
 
 echo "done"
