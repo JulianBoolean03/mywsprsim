@@ -1,1 +1,1 @@
-spr_al ered   9  42 -1.0  14.097100  BD4CCC OM17 20          0     1    0
+spr_al ered   9  42 -1.0  14.097100  K1ABC AR09 17           0     1    0

@@ -21,6 +21,8 @@
 #include <cstring>
 #include <iomanip>
 #include <iostream>
+#include <cctype>
+#include <regex>
 #include "src/JTEncode.h"
 
 // Audio parameters (matching wsprsimwav.c)
@@ -29,6 +31,96 @@ const int    SYMBOL_LENGTH = 32768;             // samples per symbol
 const double CENTER_FREQ   = 1500.0;           // center frequency (Hz)
 const double FREQ_SPACING  = 48000.0 / 32768;  // = 1.46484375 Hz spacing
 const int    DELAY_SAMPLES = 48000;             // 1 second delay
+
+// Validate WSPR callsign format
+bool validate_callsign(const char* call) {
+    if (!call || strlen(call) == 0 || strlen(call) > 12) {
+        return false;
+    }
+    
+    // Basic WSPR callsign validation:
+    // - Must contain at least one letter
+    // - Can contain letters, digits, '/', '<', '>'
+    // - Must not be just numbers or symbols
+    
+    bool has_letter = false;
+    bool has_digit = false;
+    int len = strlen(call);
+    
+    for (int i = 0; i < len; i++) {
+        char c = call[i];
+        if (isalpha(c)) {
+            has_letter = true;
+        } else if (isdigit(c)) {
+            has_digit = true;
+        } else if (c != '/' && c != '<' && c != '>') {
+            return false; // Invalid character
+        }
+    }
+    
+    // Must have at least one letter for valid callsign
+    return has_letter;
+}
+
+// Validate WSPR grid locator format
+bool validate_grid(const char* grid) {
+    if (!grid) return false;
+    
+    int len = strlen(grid);
+    if (len != 4 && len != 6) {
+        return false;
+    }
+    
+    // Format: AA00 or AA00AA
+    // First 2: A-R
+    // Next 2: 0-9
+    // Last 2 (if present): A-X
+    
+    if (len >= 2) {
+        for (int i = 0; i < 2; i++) {
+            char c = toupper(grid[i]);
+            if (c < 'A' || c > 'R') {
+                return false;
+            }
+        }
+    }
+    
+    if (len >= 4) {
+        for (int i = 2; i < 4; i++) {
+            if (!isdigit(grid[i])) {
+                return false;
+            }
+        }
+    }
+    
+    if (len == 6) {
+        for (int i = 4; i < 6; i++) {
+            char c = toupper(grid[i]);
+            if (c < 'A' || c > 'X') {
+                return false;
+            }
+        }
+    }
+    
+    return true;
+}
+
+// Validate WSPR power level
+bool validate_power(int dbm) {
+    const int valid_dbm[] = {
+        -30, -27, -23, -20, -17, -13, -10, -7, -3, 
+        0, 3, 7, 10, 13, 17, 20, 23, 27, 30, 33, 37, 40,
+        43, 47, 50, 53, 57, 60
+    };
+    const int valid_count = sizeof(valid_dbm) / sizeof(valid_dbm[0]);
+    
+    for (int i = 0; i < valid_count; i++) {
+        if (dbm == valid_dbm[i]) {
+            return true;
+        }
+    }
+    return false;
+}
 
 // Write RF frequency file
 void write_rf(const char *fn, const uint8_t *syms) {
@@ -51,16 +143,41 @@ void write_bits(const char *fn, const uint8_t *syms) {
 }
 
 int main(int argc, char** argv) {
-      if(argc != 4) {
+    if(argc != 4) {
         std::fprintf(stderr, "Usage: %s CALLSIGN GRID POWER_dBm\n", argv[0]);
+        std::fprintf(stderr, "\nExamples:\n");
+        std::fprintf(stderr, "  %s VK3ABC FM04 20\n", argv[0]);
+        std::fprintf(stderr, "  %s W1AW FN42 30\n", argv[0]);
         return 1;
     }
+    
     const char* call = argv[1];
     const char* grid = argv[2];
     int dbm = std::atoi(argv[3]);
-    if(dbm < 0 || dbm > 60) {
-        std::fprintf(stderr,"Power must be 0–60 dBm\n");
+    
+    // Validate callsign
+    if (!validate_callsign(call)) {
+        std::fprintf(stderr, "Error: Invalid callsign '%s'\n", call);
+        std::fprintf(stderr, "Callsign must contain at least one letter and only valid characters (A-Z, 0-9, /, <, >)\n");
+        std::fprintf(stderr, "Examples: VK3ABC, W1AW, PJ4/K1ABC, <PJ4/K1ABC>\n");
         return 2;
+    }
+    
+    // Validate grid locator
+    if (!validate_grid(grid)) {
+        std::fprintf(stderr, "Error: Invalid grid locator '%s'\n", grid);
+        std::fprintf(stderr, "Grid must be 4 or 6 characters in format AA00 or AA00AA\n");
+        std::fprintf(stderr, "Examples: FM04, FN42, CN85NM\n");
+        return 3;
+    }
+    
+    // Validate power level
+    if (!validate_power(dbm)) {
+        std::fprintf(stderr, "Error: Invalid power level %d dBm\n", dbm);
+        std::fprintf(stderr, "Valid power levels: -30, -27, -23, -20, -17, -13, -10, -7, -3,\n");
+        std::fprintf(stderr, "                    0, 3, 7, 10, 13, 17, 20, 23, 27, 30, 33, 37, 40,\n");
+        std::fprintf(stderr, "                    43, 47, 50, 53, 57, 60\n");
+        return 4;
     }
 
     // Buffers for normal and altered symbols
