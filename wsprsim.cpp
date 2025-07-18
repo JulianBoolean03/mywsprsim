@@ -31,6 +31,26 @@ const int    SYMBOL_LENGTH = 32768;             // samples per symbol
 const double CENTER_FREQ   = 1500.0;           // center frequency (Hz)
 const double FREQ_SPACING  = 48000.0 / 32768;  // = 1.46484375 Hz spacing
 const int    DELAY_SAMPLES = 48000;             // 1 second delay
+const int    SIGNAL_LENGTH = SYMBOL_LENGTH * WSPR_SYMBOL_COUNT;  // total samples
+const int    SLOPE_SAMPLES = 0.02 * SAMPLE_RATE;  // 20ms slope
+const int    TOTAL_SAMPLES = SIGNAL_LENGTH + 2 * DELAY_SAMPLES;  // with padding
+
+// WAV file header structure
+struct WavHeader {
+    char     riff[4] = {'R', 'I', 'F', 'F'};
+    uint32_t chunk_size;
+    char     wave[4] = {'W', 'A', 'V', 'E'};
+    char     fmt[4] = {'f', 'm', 't', ' '};
+    uint32_t subchunk1_size = 16;
+    uint16_t audio_format = 1;  // PCM
+    uint16_t num_channels = 1;  // mono
+    uint32_t sample_rate = SAMPLE_RATE;
+    uint32_t byte_rate = SAMPLE_RATE * 2;  // 16-bit samples
+    uint16_t block_align = 2;
+    uint16_t bits_per_sample = 16;
+    char     data[4] = {'d', 'a', 't', 'a'};
+    uint32_t subchunk2_size;
+};
 
 // Validate WSPR callsign format
 bool validate_callsign(const char* call) {
@@ -75,6 +95,8 @@ bool validate_grid(const char* grid) {
     // First 2: A-R
     // Next 2: 0-9
     // Last 2 (if present): A-X
+    //
+    
     
     if (len >= 2) {
         for (int i = 0; i < 2; i++) {
@@ -142,6 +164,94 @@ void write_bits(const char *fn, const uint8_t *syms) {
     b.write(reinterpret_cast<const char*>(syms), WSPR_SYMBOL_COUNT);
 }
 
+// Calculate raised cosine slope for fade in/out
+double raised_cosine(double x) {
+    if (x <= -1.0 || x >= 1.0) return 0.0;
+    return 0.5 * (1.0 + cos(M_PI * x));
+}
+
+// Volume envelope for fade in/out
+double volume_envelope(int sample_pos) {
+    if (sample_pos >= 0 && sample_pos < SLOPE_SAMPLES) {
+        // Fade in
+        return raised_cosine(1.0 - (double)sample_pos / SLOPE_SAMPLES);
+    }
+    if (sample_pos >= (SIGNAL_LENGTH - SLOPE_SAMPLES) && sample_pos < SIGNAL_LENGTH) {
+        // Fade out
+        int fade_pos = sample_pos - (SIGNAL_LENGTH - SLOPE_SAMPLES);
+        return raised_cosine((double)fade_pos / SLOPE_SAMPLES);
+    }
+    if (sample_pos >= 0 && sample_pos < SIGNAL_LENGTH) {
+        // Full volume
+        return 1.0;
+    }
+    // Outside signal range
+    return 0.0;
+}
+
+// Generate WAV audio signal from WSPR symbols
+void generate_wav_signal(const uint8_t* symbols, std::vector<double>& signal) {
+    signal.resize(TOTAL_SAMPLES, 0.0);
+    
+    double phase = 0.0;
+    double two_pi_dt = 2.0 * M_PI / SAMPLE_RATE;
+    
+    for (int sym = 0; sym < WSPR_SYMBOL_COUNT; sym++) {
+        // Calculate frequency for this symbol
+        double freq = CENTER_FREQ + ((double)symbols[sym] - 1.5) * FREQ_SPACING;
+        double dphi = two_pi_dt * freq;
+        
+        // Generate samples for this symbol
+        for (int samp = 0; samp < SYMBOL_LENGTH; samp++) {
+            int total_pos = DELAY_SAMPLES + sym * SYMBOL_LENGTH + samp;
+            
+            if (total_pos < TOTAL_SAMPLES) {
+                // Use constant amplitude for now to isolate frequency issue
+                signal[total_pos] = 0.5 * sin(phase);
+                phase += dphi;
+            }
+        }
+        
+        // Keep phase continuous but normalize to prevent overflow
+        while (phase > 2.0 * M_PI) {
+            phase -= 2.0 * M_PI;
+        }
+        while (phase < -2.0 * M_PI) {
+            phase += 2.0 * M_PI;
+        }
+    }
+}
+
+// Write WAV file
+void write_wav(const char* filename, const uint8_t* symbols) {
+    std::vector<double> signal;
+    generate_wav_signal(symbols, signal);
+    
+    // Create WAV header
+    WavHeader header;
+    header.subchunk2_size = signal.size() * 2; // 16-bit samples
+    header.chunk_size = 36 + header.subchunk2_size;
+    
+    std::ofstream wav(filename, std::ios::binary);
+    if (!wav) {
+        std::fprintf(stderr, "Error: Cannot create WAV file %s\n", filename);
+        return;
+    }
+    
+    // Write header
+    wav.write(reinterpret_cast<const char*>(&header), sizeof(header));
+    
+    // Write audio data (convert to 16-bit signed integers)
+    for (double sample : signal) {
+        // Clamp to [-1.0, 1.0] and convert to 16-bit
+        sample = std::max(-1.0, std::min(1.0, sample));
+        int16_t sample_16 = static_cast<int16_t>(sample * 32767);
+        wav.write(reinterpret_cast<const char*>(&sample_16), sizeof(sample_16));
+    }
+    
+    wav.close();
+}
+
 int main(int argc, char** argv) {
     if(argc != 4) {
         std::fprintf(stderr, "Usage: %s CALLSIGN GRID POWER_dBm\n", argv[0]);
@@ -190,12 +300,14 @@ int main(int argc, char** argv) {
                     normal_syms);
 
 
-    // 2) Dump normal bits + RF
+    // 2) Dump normal bits + RF + WAV
     write_bits("wspr_normal.bits", normal_syms);
     std::puts("→ wspr_normal.bits");
     write_rf("wspr_normal.rf", normal_syms);
     std::puts("→ wspr_normal.rf");
-
+    write_wav("wspr_normal.wav", normal_syms);
+    std::puts("→ wspr_normal.wav");
+   //inverting the sync bits for altered 
     const uint8_t sync_vector[WSPR_SYMBOL_COUNT] = {
     1, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 1, 1, 0, 0, 0, 1, 0, 0,
     1, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0,
@@ -215,15 +327,17 @@ int main(int argc, char** argv) {
 
 
 
-    // 4) Dump altered bits + RF
+    // 4) Dump altered bits + RF + WAV
     write_bits("wspr_altered.bits", alt_syms);
     std::puts("→ wspr_altered.bits");
     write_rf("wspr_altered.rf", alt_syms);
     std::puts("→ wspr_altered.rf");
+    write_wav("wspr_altered.wav", alt_syms);
+    std::puts("→ wspr_altered.wav");
 
     std::puts("\nSimulation complete. You now have:");
-    std::puts(" - wspr_normal.bits & wspr_normal.rf");
-    std::puts(" - wspr_altered.bits & wspr_altered.rf");
+    std::puts(" - wspr_normal.bits, wspr_normal.rf, wspr_normal.wav");
+    std::puts(" - wspr_altered.bits, wspr_altered.rf, wspr_altered.wav");
     return 0;
 }
 

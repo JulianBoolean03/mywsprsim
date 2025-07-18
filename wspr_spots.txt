@@ -1,1 +1,1 @@
-spr_al ered   9  42 -1.0  14.097100  K1ABC AR09 17           0     1    0
+spr_al ered   9  41 -1.0  14.097100  JA1ABC PM95 13          0     1    0

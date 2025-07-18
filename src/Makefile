@@ -1,8 +1,8 @@
 # JTEncode Library Makefile
 CC = gcc
 CXX = g++
-CFLAGS = -O2 -Wall -fPIC
-CXXFLAGS = -O2 -Wall -fPIC -std=c++11
+CFLAGS = -O2 -Wall -fPIC -I.
+CXXFLAGS = -O2 -Wall -fPIC -std=c++11 -I.
 
 # Library name
 LIBNAME = libjtencode.a
