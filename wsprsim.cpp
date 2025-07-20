@@ -33,7 +33,8 @@ const double FREQ_SPACING  = 48000.0 / 32768;  // = 1.46484375 Hz spacing
 const int    DELAY_SAMPLES = 48000;             // 1 second delay
 const int    SIGNAL_LENGTH = SYMBOL_LENGTH * WSPR_SYMBOL_COUNT;  // total samples
 const int    SLOPE_SAMPLES = 0.02 * SAMPLE_RATE;  // 20ms slope
-const int    TOTAL_SAMPLES = SIGNAL_LENGTH + 2 * DELAY_SAMPLES;  // with padding
+// Total samples: each symbol plus one-second delays at start/end
+const int    TOTAL_SAMPLES = SIGNAL_LENGTH + 2 * DELAY_SAMPLES;  // =162*32768 + 2*48000 = 5404416 samples
 
 // WAV file header structure
 struct WavHeader {
