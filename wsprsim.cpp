@@ -145,7 +145,7 @@ bool validate_power(int dbm) {
     return false;
 }
 
-// Write RF frequency file
+// Write RF frequency file *this writes a text file with one freq per line
 void write_rf(const char *fn, const uint8_t *syms) {
     std::ofstream rf(fn);
     rf << "# WSPR RF Frequency File\n";
@@ -199,7 +199,7 @@ void generate_wav_signal(const uint8_t* symbols, std::vector<double>& signal) {
     
     for (int sym = 0; sym < WSPR_SYMBOL_COUNT; sym++) {
         // Calculate frequency for this symbol
-        double freq = CENTER_FREQ + ((double)symbols[sym] - 1.5) * FREQ_SPACING;
+        double freq = CENTER_FREQ + ((double)symbols[sym] - 1.5) * FREQ_SPACING; //maps 4 audio freqs spaced around the center freq
         double dphi = two_pi_dt * freq;
         
         // Generate samples for this symbol
@@ -208,7 +208,15 @@ void generate_wav_signal(const uint8_t* symbols, std::vector<double>& signal) {
             
             if (total_pos < TOTAL_SAMPLES) {
                 // Use constant amplitude for now to isolate frequency issue
-                signal[total_pos] = 0.5 * sin(phase);
+                // vol envelope
+                int env_idx = total_pos- DELAY_SAMPLES;
+                double env = volume_envelope(env_idx);
+{
+                // apply fade‐in/out envelope
+                int env_idx = total_pos - DELAY_SAMPLES;
+                double env = volume_envelope(env_idx);
+                signal[total_pos] = 0.5 * env * sin(phase);
+            }
                 phase += dphi;
             }
         }
