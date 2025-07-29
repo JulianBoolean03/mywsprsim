@@ -200,11 +200,11 @@ void generate_wav_signal(const uint8_t* symbols, std::vector<double>& signal) {
     for (int sym = 0; sym < WSPR_SYMBOL_COUNT; sym++) {
         // Calculate frequency for this symbol
         double freq = CENTER_FREQ + ((double)symbols[sym] - 1.5) * FREQ_SPACING; //maps 4 audio freqs spaced around the center freq
-        double dphi = two_pi_dt * freq;
+        double dphi = two_pi_dt * freq; // uses the freqs to generate the phase since the phase changes wit the freqs
         
         // Generate samples for this symbol
         for (int samp = 0; samp < SYMBOL_LENGTH; samp++) {
-            int total_pos = DELAY_SAMPLES + sym * SYMBOL_LENGTH + samp;
+            int total_pos = DELAY_SAMPLES + sym * SYMBOL_LENGTH + samp;//gets the absolute position of the signal vector where the sample should be stored
             
             if (total_pos < TOTAL_SAMPLES) {
                 // Use constant amplitude for now to isolate frequency issue
@@ -215,7 +215,7 @@ void generate_wav_signal(const uint8_t* symbols, std::vector<double>& signal) {
                 // apply fade‐in/out envelope
                 int env_idx = total_pos - DELAY_SAMPLES;
                 double env = volume_envelope(env_idx);
-                signal[total_pos] = 0.5 * env * sin(phase);
+                signal[total_pos] = 0.5 * env * sin(phase); // adds t
             }
                 phase += dphi;
             }

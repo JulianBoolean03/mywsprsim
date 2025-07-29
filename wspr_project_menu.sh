@@ -24,9 +24,9 @@ clear_and_header() {
 # Generate new WSPR RF files
 generate_rf_files() {
     clear_and_header
-    echo -e "${YELLOW}[Generate] Generate New WSPR RF Files${NC}"
+    echo -e "${YELLOW}[Generate] Generate New WSPR WAV signal and RF Files${NC}"
     echo ""
-    echo "This will create both normal and altered WSPR RF signals."
+    echo "This will create both normal and altered WSPR RF and WAV signals."
     echo ""
     
     # Get user input
@@ -73,7 +73,7 @@ generate_rf_files() {
 # Test RF files against all decoders
 test_all_decoders() {
     clear_and_header
-echo -e "${YELLOW}[Test] Test RF Files Against All Decoders${NC}"
+echo -e "${YELLOW}[Test] Test WAV Signal Files Against All Decoders${NC}"
     echo ""
     
     # Check if RF files exist
@@ -100,7 +100,7 @@ echo -e "${BLUE}[Check] Test 1: Normal RF → Normal Decoder${NC}"
     echo ""
     
     # Test 2: Normal RF + Altered decoder (should NOT decode)
-echo -e "${BLUE}[Check] Test 2: Normal RF → Altered Decoder${NC}"
+echo -e "${BLUE}[Check] Test 2: Normal WAV → Altered Decoder${NC}"
     echo "Expected: [FAIL] SHOULD NOT DECODE"
     echo "Running decode_alt_norm.sh..."
     echo "----------------------------------------"
@@ -111,7 +111,7 @@ echo -e "${BLUE}[Check] Test 2: Normal RF → Altered Decoder${NC}"
     echo ""
     
     # Test 3: Altered RF + Normal decoder (should NOT decode)
-echo -e "${BLUE}[Check] Test 3: Altered RF → Normal Decoder${NC}"
+echo -e "${BLUE}[Check] Test 3: Altered WAV → Normal Decoder${NC}"
     echo "Expected: [FAIL] SHOULD NOT DECODE"
     echo "Running decode_norm_alt.sh..."
     echo "----------------------------------------"
@@ -122,7 +122,7 @@ echo -e "${BLUE}[Check] Test 3: Altered RF → Normal Decoder${NC}"
     echo ""
     
     # Test 4: Altered RF + Altered decoder (should decode)
-echo -e "${BLUE}[Check] Test 4: Altered RF → Altered Decoder${NC}"
+echo -e "${BLUE}[Check] Test 4: Altered WAV → Altered Decoder${NC}"
     echo "Expected: [OK] SHOULD DECODE"
     echo "Running decode_alt_alt.sh..."
     echo "----------------------------------------"
@@ -143,7 +143,7 @@ echo -e "${GREEN}[Done] All tests completed!${NC}"
 # Show statistics about RF files
 show_rf_stats() {
     clear_and_header
-    echo -e "${YELLOW}[Stats] RF File Statistics${NC}"
+    echo -e "${YELLOW}[Stats] WAV File Statistics${NC}"
     echo ""
     
     # Check if files exist
